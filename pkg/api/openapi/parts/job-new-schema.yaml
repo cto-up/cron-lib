@@ -1,0 +1,22 @@
+type: object
+required:
+  - name
+  - status
+properties:
+  name:
+    type: string
+  status:
+    type: string
+    maxLength: 20
+  last_execution_time:
+    type: string
+    format: date-time
+  next_execution_time:
+    type: string
+    format: date-time
+  locked_by:
+    type: string
+    maxLength: 128
+  locked_at:
+    type: string
+    format: date-time

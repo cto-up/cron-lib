@@ -1,0 +1,50 @@
+type: object
+required:
+  - id
+  - job_name
+  - schedule
+  - is_long_running
+  - is_enabled
+  - last_registered_at
+  - instance_id
+  - tenant_id
+  - created_at
+  - updated_at
+properties:
+  id:
+    type: string
+    format: uuid
+    description: Unique identifier for the job
+  job_name:
+    type: string
+    description: Name of the job
+  description:
+    type: string
+    description: Human-readable description of the job
+  schedule:
+    type: string
+    description: Cron schedule expression
+  is_long_running:
+    type: boolean
+    description: Whether this is a long-running job that needs heartbeats
+  is_enabled:
+    type: boolean
+    description: Whether the job is enabled
+  last_registered_at:
+    type: string
+    format: date-time
+    description: When the job was last registered
+  instance_id:
+    type: string
+    description: ID of the instance that registered the job
+  tenant_id:
+    type: string
+    description: Tenant ID the job belongs to
+  created_at:
+    type: string
+    format: date-time
+    description: When the job was first registered
+  updated_at:
+    type: string
+    format: date-time
+    description: When the job was last updated

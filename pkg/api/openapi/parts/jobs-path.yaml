@@ -1,0 +1,68 @@
+get:
+  description: |
+    Returns all Jobs from the system that the user has access to
+  operationId: listJobs
+  parameters:
+    - name: page
+      in: query
+      description: page number
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        default: 1
+    - name: pageSize
+      in: query
+      description: maximum number of results to return
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 50
+        default: 10
+    - name: sortBy
+      in: query
+      description: field to sort by
+      required: false
+      schema:
+        type: string
+    - name: order
+      in: query
+      description: sort order
+      required: false
+      schema:
+        type: string
+        enum: [asc, desc]
+    - name: q
+      in: query
+      description: starts with
+      required: false
+      schema:
+        type: string
+    - name: detail
+      in: query
+      description: basic or full
+      required: false
+      schema:
+        type: string
+    - name: lang
+      in: query
+      schema:
+        type: string
+        enum: [en, fr]
+        default: en
+  responses:
+    "200":
+      description: scheduled_task response
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "./job-schema.yaml"
+    "401":
+      description: Unauthorized
+    "403":
+      description: Forbidden

@@ -1,0 +1,48 @@
+type: object
+required:
+  - id
+  - app_id
+  - request_id
+  - job_name
+  - scheduled_time
+  - status
+  - tenantID
+  - createdAt
+properties:
+  id:
+    type: string
+    format: uuid
+  app_id:
+    type: string
+    maxLength: 64
+  request_id:
+    type: string
+    maxLength: 128
+  job_name:
+    type: string
+    maxLength: 128
+  scheduled_time:
+    type: string
+    format: date-time
+  start_time:
+    type: string
+    format: date-time
+  end_time:
+    type: string
+    format: date-time
+  status:
+    type: string
+    maxLength: 20
+  output:
+    type: string
+  error:
+    type: string
+  tenantID:
+    type: string
+    maxLength: 64
+  createdAt:
+    type: string
+    format: date-time
+  updatedAt:
+    type: string
+    format: date-time

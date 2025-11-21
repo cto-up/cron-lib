@@ -1,0 +1,24 @@
+openapi: "3.0.0"
+info:
+  version: 1.0.0
+  title: Cron API
+  description: An API that manages Cron
+  termsOfService: http://swagger.io/terms/
+  contact:
+    name: Swagger API Team
+    email: apiteam@swagger.io
+    url: http://swagger.io
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+components:
+  schemas:
+    RegisteredJob:
+      $ref: "./parts/registered-job-schema.yaml"
+    JobAuditLog:
+      $ref: "./parts/job-audit-log-schema.yaml"
+    NewJob:
+      $ref: "./parts/job-new-schema.yaml"
+    Job:
+      $ref: "./parts/job-schema.yaml"

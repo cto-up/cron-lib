@@ -1,0 +1,83 @@
+openapi: "3.0.0"
+info:
+  version: 1.0.0
+  title: Cron API
+  description: An API that manages Cron jobs and their execution history
+  termsOfService: http://swagger.io/terms/
+  contact:
+    name: Swagger API Team
+    email: apiteam@swagger.io
+    url: http://swagger.io
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+paths:
+  /api/v1/cron/job-audit-logs:
+    $ref: "./parts/job-audit-logs-path.yaml"
+  /api/v1/cron/job-audit-logs/{id}:
+    $ref: "./parts/job-audit-logs-id-path.yaml"
+  /api/v1/cron/jobs:
+    $ref: "./parts/jobs-path.yaml"
+  /api/v1/cron/jobs/{id}:
+    $ref: "./parts/jobs-id-path.yaml"
+  /api/v1/cron/registered-jobs:
+    $ref: "./parts/registered-jobs-path.yaml"
+  /api/v1/cron/registered-jobs/{id}:
+    $ref: "./parts/registered-jobs-id-path.yaml"
+  /api/v1/cron/registered-jobs/{id}/audit-logs:
+    $ref: "./parts/registered-jobs-id-audit-logs-path.yaml"
+  /api/v1/cron/migrate/up:
+    post:
+      description: Apply pending migrations
+      operationId: migrateUp
+      responses:
+        "200":
+          description: Migrations applied successfully
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal server error
+  /api/v1/cron/migrate/down:
+    post:
+      description: Revert last migration
+      operationId: migrateDown
+      responses:
+        "200":
+          description: Migration reverted successfully
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal server error
+  /api/v1/cron/seed/reference:
+    post:
+      description: Seeds reference data for module
+      operationId: seedReferenceData
+      responses:
+        "201":
+          description: Reference data seeded successfully
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden - requires admin privileges
+        "500":
+          description: Internal server error
+  /api/v1/cron/seed/sample:
+    post:
+      description: Seeds sample data for module
+      operationId: seedSampleData
+      responses:
+        "201":
+          description: Sample data seeded successfully
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden - requires admin privileges
+        "500":
+          description: Internal server error
+
+components:
+  $ref: "./cron-schema.yaml#/components"

@@ -1,0 +1,10 @@
+package: cron
+output: api/openapi/cron-schema.go
+generate:
+  models: true
+output-options:
+  # to make sure that all types are generated
+  skip-prune: true
+import-mapping:
+  ../cron-schema.yaml: "-"
+  ./cron-schema.yaml: "-"

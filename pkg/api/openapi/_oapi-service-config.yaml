@@ -1,0 +1,11 @@
+package: cron
+output: api/openapi/cron-service.go
+generate:
+  gin-server: true
+  models: true
+output-options:
+  # to make sure that all types are generated
+  skip-prune: false
+import-mapping:
+  ../cron-schema.yaml: "-"
+  ./cron-schema.yaml: "-"
