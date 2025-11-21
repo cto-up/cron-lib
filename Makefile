@@ -51,8 +51,8 @@ openapi:
 	@echo "Generating OpenAPI code"
 	@rm -rf $(BASE_API_FE_DIR)
 	openapi --input $(BASE_OPENAPI_CRON_DIR)/cron-api.yaml --output $(BASE_API_FE_DIR) --client axios
-	oapi-codegen -config $(BASE_OPENAPI_CRON_DIR)/_oapi-schema-config.yaml $(BASE_OPENAPI_CRON_DIR)/cron-schema.yaml > api/openapi/schema.go
-	oapi-codegen -config $(BASE_OPENAPI_CRON_DIR)/_oapi-service-config.yaml $(BASE_OPENAPI_CRON_DIR)/cron-api.yaml > api/openapi/service.go
+	oapi-codegen -config $(BASE_OPENAPI_CRON_DIR)/_oapi-schema-config.yaml $(BASE_OPENAPI_CRON_DIR)/cron-schema.yaml > api/openapi/cron-schema.go
+	oapi-codegen -config $(BASE_OPENAPI_CRON_DIR)/_oapi-service-config.yaml $(BASE_OPENAPI_CRON_DIR)/cron-api.yaml > api/openapi/cron-service.go
 
 release:
 	@echo "Creating release"
