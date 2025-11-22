@@ -33,14 +33,14 @@ sqlc:
 
 
 BASE_API_BE_DIR := api/openapi
-BASE_API_FE_DIR := frontend/src/api/openapi
+BASE_API_FE_DIR := ../cron-fe-lib
 
 # Define the pattern to search for and replace
-SEARCH_STRING_1 := from \'./cron
-REPLACE_STRING_1 := from \'openapi/cron/cron
+SEARCH_STRING_1 := from \'./core
+REPLACE_STRING_1 := from \'core-fe-lib/openapi/core/core
 
-SEARCH_STRING_2 := from \'../cron
-REPLACE_STRING_2 := from \'openapi/cron/cron
+SEARCH_STRING_2 := from \'../core
+REPLACE_STRING_2 := from \'core-fe-lib/openapi/core/core
 
 BASE_OPENAPI_CRON_DIR := pkg/api/openapi
 
@@ -49,8 +49,13 @@ build:
 
 openapi:
 	@echo "Generating OpenAPI code"
-	@rm -rf $(BASE_API_FE_DIR)
+	@find $(BASE_API_FE_DIR) -type f -name "*.ts" -delete
 	openapi --input $(BASE_OPENAPI_CRON_DIR)/cron-api.yaml --output $(BASE_API_FE_DIR) --client axios
+	@rm -rf $(BASE_API_FE_DIR)/$(MODULE)/core
+	@find $(BASE_API_FE_DIR)/$(MODULE) -name "*.ts" -type f -exec sed -i '' "s|$(SEARCH_STRING_1)|$(REPLACE_STRING_1)|g" {} +
+	@find $(BASE_API_FE_DIR)/$(MODULE) -name "*.ts" -type f -exec sed -i '' "s|$(SEARCH_STRING_2)|$(REPLACE_STRING_2)|g" {} +
+	@echo "Replacement complete."
+	
 	oapi-codegen -config $(BASE_OPENAPI_CRON_DIR)/_oapi-schema-config.yaml $(BASE_OPENAPI_CRON_DIR)/cron-schema.yaml > api/openapi/cron-schema.go
 	oapi-codegen -config $(BASE_OPENAPI_CRON_DIR)/_oapi-service-config.yaml $(BASE_OPENAPI_CRON_DIR)/cron-api.yaml > api/openapi/cron-service.go
 

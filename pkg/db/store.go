@@ -52,7 +52,7 @@ func (s *Store) ExecTx(ctx context.Context, fn func(*repository.Queries) error) 
 }
 
 var prefix = "cron"
-var path = "file://internal/modules/cron/db/migration"
+var path = "file://pkg/db/migration"
 
 var once = sync.Once{}
 
