@@ -3,6 +3,8 @@ package db
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"runtime"
 	"sync"
 
 	sqlservice "ctoup.com/coreapp/pkg/shared/sql"
@@ -52,20 +54,32 @@ func (s *Store) ExecTx(ctx context.Context, fn func(*repository.Queries) error) 
 }
 
 var prefix = "cron"
-var path = "file://pkg/db/migration"
+
+// getMigrationPath returns the absolute path to the migration directory
+func getMigrationPath() string {
+	_, filename, _, _ := runtime.Caller(0)
+	// Get the directory containing this file (store.go)
+	dir := filepath.Dir(filename)
+	// Construct path to migration directory
+	migrationPath := filepath.Join(dir, "migration")
+	return "file://" + migrationPath
+}
 
 var once = sync.Once{}
 
 func migrate(dbConnection string) {
 	once.Do(func() {
+		path := getMigrationPath()
 		sqlservice.MigrateUp(dbConnection, path, prefix)
 	})
 }
 
 func MigrateUp(dbConnection string) error {
+	path := getMigrationPath()
 	return sqlservice.MigrateUp(dbConnection, path, prefix)
 }
 
 func MigrateDown(dbConnection string) error {
+	path := getMigrationPath()
 	return sqlservice.MigrateDown(dbConnection, path, prefix)
 }
