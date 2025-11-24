@@ -69,7 +69,7 @@ func (h *RegisteredJobHandler) ListRegisteredJobs(c *gin.Context, params api.Lis
 	}
 
 	// Convert to API response format
-	var apiJobs []api.RegisteredJob
+	apiJobs := []api.RegisteredJob{}
 	for _, job := range jobs {
 		apiJob := api.RegisteredJob{
 			Id:               job.ID,
