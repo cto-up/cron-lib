@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
+	"ctoup.com/coreapp/pkg/shared/auth"
 	"ctoup.com/coreapp/pkg/shared/repository/subentity"
-	access "ctoup.com/coreapp/pkg/shared/service"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -19,7 +19,7 @@ import (
 
 // DeleteJob implements api.ServerInterface.
 func (h *CronHandler) DeleteJob(c *gin.Context, id types.UUID) {
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return
@@ -37,7 +37,7 @@ func (h *CronHandler) DeleteJob(c *gin.Context, id types.UUID) {
 
 // FindJobByID implements api.ServerInterface.
 func (h *CronHandler) GetJobByID(c *gin.Context, id types.UUID, params api.GetJobByIDParams) {
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return
@@ -60,7 +60,7 @@ func (h *CronHandler) GetJobByID(c *gin.Context, id types.UUID, params api.GetJo
 
 // ListJobs implements api.ServerInterface.
 func (h *CronHandler) ListJobs(c *gin.Context, params api.ListJobsParams) {
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return

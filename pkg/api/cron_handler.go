@@ -3,11 +3,11 @@ package api
 import (
 	"context"
 
-	api "github.com/cto-up/cron-lib/api/openapi"
-
 	"ctoup.com/coreapp/api/openapi/core"
 	access "ctoup.com/coreapp/pkg/shared/service"
-	"github.com/cto-up/cron-lib/pkg"
+	api "github.com/cto-up/cron-lib/api/openapi"
+
+	cron "github.com/cto-up/cron-lib/pkg"
 	"github.com/cto-up/cron-lib/pkg/db"
 	"github.com/cto-up/cron-lib/pkg/service"
 	"github.com/gin-gonic/gin"
@@ -15,7 +15,7 @@ import (
 )
 
 type CronHandler struct {
-	authClientPool *access.FirebaseTenantClientConnectionPool
+	authClientPool *access.AuthClientPool
 	store          *db.Store
 	*JobAuditLogHandler
 	*MigrationHandler
@@ -23,7 +23,7 @@ type CronHandler struct {
 	*RegisteredJobHandler
 }
 
-func RegisterHandler(connPool *pgxpool.Pool, firebaseTenantClientPool *access.FirebaseTenantClientConnectionPool, openaiOptions core.GinServerOptions, router *gin.Engine) {
+func RegisterHandler(connPool *pgxpool.Pool, firebaseTenantClientPool *access.AuthClientPool, openaiOptions core.GinServerOptions, router *gin.Engine) {
 
 	// Create job manager
 	jobManager := cron.InitJobManager(context.Background(), connPool)

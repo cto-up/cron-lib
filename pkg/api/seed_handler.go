@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"ctoup.com/coreapp/pkg/shared/auth"
 	access "ctoup.com/coreapp/pkg/shared/service"
 	"github.com/cto-up/cron-lib/pkg/service"
 	"github.com/gin-gonic/gin"
@@ -27,7 +28,7 @@ func (h *SeedHandler) SeedReferenceData(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admin privileges required"})
 		return
 	}
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return
@@ -49,7 +50,7 @@ func (h *SeedHandler) SeedSampleData(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admin privileges required"})
 		return
 	}
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"ctoup.com/coreapp/pkg/shared/auth"
 	"ctoup.com/coreapp/pkg/shared/repository/subentity"
 	access "ctoup.com/coreapp/pkg/shared/service"
 	"github.com/gin-gonic/gin"
@@ -19,13 +20,13 @@ import (
 
 // https://pkg.go.dev/github.com/go-playground/validator/v10#hdr-One_Of
 type JobAuditLogHandler struct {
-	authClientPool *access.FirebaseTenantClientConnectionPool
+	authClientPool *access.AuthClientPool
 	store          *db.Store
 }
 
 // DeleteJobAuditLog implements api.ServerInterface.
 func (h *JobAuditLogHandler) DeleteJobAuditLog(c *gin.Context, id types.UUID) {
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return
@@ -43,7 +44,7 @@ func (h *JobAuditLogHandler) DeleteJobAuditLog(c *gin.Context, id types.UUID) {
 
 // FindJobAuditLogByID implements api.ServerInterface.
 func (h *JobAuditLogHandler) GetJobAuditLogByID(c *gin.Context, id types.UUID) {
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return
@@ -66,7 +67,7 @@ func (h *JobAuditLogHandler) GetJobAuditLogByID(c *gin.Context, id types.UUID) {
 
 // ListJobAuditLogs implements api.ServerInterface.
 func (h *JobAuditLogHandler) ListJobAuditLogs(c *gin.Context, params api.ListJobAuditLogsParams) {
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return
@@ -124,7 +125,7 @@ func (h *JobAuditLogHandler) ListJobAuditLogs(c *gin.Context, params api.ListJob
 	}
 }
 
-func newJobAuditLogHandler(store *db.Store, authClientPool *access.FirebaseTenantClientConnectionPool) *JobAuditLogHandler {
+func newJobAuditLogHandler(store *db.Store, authClientPool *access.AuthClientPool) *JobAuditLogHandler {
 	return &JobAuditLogHandler{
 		store:          store,
 		authClientPool: authClientPool,

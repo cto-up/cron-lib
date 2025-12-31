@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"ctoup.com/coreapp/api/helpers"
+	"ctoup.com/coreapp/pkg/shared/auth"
 	access "ctoup.com/coreapp/pkg/shared/service"
 	"ctoup.com/coreapp/pkg/shared/util"
 	api "github.com/cto-up/cron-lib/api/openapi"
@@ -17,10 +18,10 @@ import (
 
 type RegisteredJobHandler struct {
 	store          *db.Store
-	authClientPool *access.FirebaseTenantClientConnectionPool
+	authClientPool *access.AuthClientPool
 }
 
-func newRegisteredJobHandler(store *db.Store, authClientPool *access.FirebaseTenantClientConnectionPool) *RegisteredJobHandler {
+func newRegisteredJobHandler(store *db.Store, authClientPool *access.AuthClientPool) *RegisteredJobHandler {
 	return &RegisteredJobHandler{
 		store:          store,
 		authClientPool: authClientPool,
@@ -29,7 +30,7 @@ func newRegisteredJobHandler(store *db.Store, authClientPool *access.FirebaseTen
 
 // ListRegisteredJobs godoc
 func (h *RegisteredJobHandler) ListRegisteredJobs(c *gin.Context, params api.ListRegisteredJobsParams) {
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return
@@ -92,7 +93,7 @@ func (h *RegisteredJobHandler) ListRegisteredJobs(c *gin.Context, params api.Lis
 
 // GetRegisteredJob godoc
 func (h *RegisteredJobHandler) GetRegisteredJob(c *gin.Context, jobID types.UUID) {
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return
@@ -127,7 +128,7 @@ func (h *RegisteredJobHandler) GetRegisteredJob(c *gin.Context, jobID types.UUID
 
 // UpdateRegisteredJob godoc
 func (h *RegisteredJobHandler) UpdateRegisteredJob(c *gin.Context, jobID types.UUID) {
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return
@@ -184,7 +185,7 @@ func (h *RegisteredJobHandler) UpdateRegisteredJob(c *gin.Context, jobID types.U
 
 // GetJobAuditLogs godoc
 func (h *RegisteredJobHandler) GetJobAuditLogs(c *gin.Context, jobID types.UUID, params api.GetJobAuditLogsParams) {
-	tenantID, exists := c.Get(access.AUTH_TENANT_ID_KEY)
+	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
 		return
