@@ -6,7 +6,6 @@ import (
 
 	"ctoup.com/coreapp/pkg/shared/auth"
 	"ctoup.com/coreapp/pkg/shared/repository/subentity"
-	access "ctoup.com/coreapp/pkg/shared/service"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -20,7 +19,7 @@ import (
 
 // https://pkg.go.dev/github.com/go-playground/validator/v10#hdr-One_Of
 type JobAuditLogHandler struct {
-	authClientPool *access.AuthClientPool
+	authClientPool auth.AuthClientPool
 	store          *db.Store
 }
 
@@ -125,7 +124,7 @@ func (h *JobAuditLogHandler) ListJobAuditLogs(c *gin.Context, params api.ListJob
 	}
 }
 
-func newJobAuditLogHandler(store *db.Store, authClientPool *access.AuthClientPool) *JobAuditLogHandler {
+func newJobAuditLogHandler(store *db.Store, authClientPool auth.AuthClientPool) *JobAuditLogHandler {
 	return &JobAuditLogHandler{
 		store:          store,
 		authClientPool: authClientPool,

@@ -7,7 +7,6 @@ import (
 
 	"ctoup.com/coreapp/api/helpers"
 	"ctoup.com/coreapp/pkg/shared/auth"
-	access "ctoup.com/coreapp/pkg/shared/service"
 	"ctoup.com/coreapp/pkg/shared/util"
 	api "github.com/cto-up/cron-lib/api/openapi"
 	"github.com/cto-up/cron-lib/pkg/db"
@@ -18,10 +17,10 @@ import (
 
 type RegisteredJobHandler struct {
 	store          *db.Store
-	authClientPool *access.AuthClientPool
+	authClientPool auth.AuthClientPool
 }
 
-func newRegisteredJobHandler(store *db.Store, authClientPool *access.AuthClientPool) *RegisteredJobHandler {
+func newRegisteredJobHandler(store *db.Store, authClientPool auth.AuthClientPool) *RegisteredJobHandler {
 	return &RegisteredJobHandler{
 		store:          store,
 		authClientPool: authClientPool,
