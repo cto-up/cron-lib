@@ -1,3 +1,4 @@
+-- +goose Up
 -- cron_registered_jobs definition
 CREATE UNLOGGED TABLE cron_registered_jobs (
     id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -23,3 +24,5 @@ CREATE TRIGGER update_cron_registered_jobs_modtime
 BEFORE UPDATE ON cron_registered_jobs
 FOR EACH ROW
 EXECUTE FUNCTION update_modified_column();
+-- +goose Down
+DROP TABLE IF EXISTS cron_registered_jobs;

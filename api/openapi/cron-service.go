@@ -191,12 +191,6 @@ type ServerInterface interface {
 	// (GET /api/v1/cron/jobs/{id})
 	GetJobByID(c *gin.Context, id openapi_types.UUID, params GetJobByIDParams)
 
-	// (POST /api/v1/cron/migrate/down)
-	MigrateDown(c *gin.Context)
-
-	// (POST /api/v1/cron/migrate/up)
-	MigrateUp(c *gin.Context)
-
 	// (GET /api/v1/cron/registered-jobs)
 	ListRegisteredJobs(c *gin.Context, params ListRegisteredJobsParams)
 
@@ -472,32 +466,6 @@ func (siw *ServerInterfaceWrapper) GetJobByID(c *gin.Context) {
 	siw.Handler.GetJobByID(c, id, params)
 }
 
-// MigrateDown operation middleware
-func (siw *ServerInterfaceWrapper) MigrateDown(c *gin.Context) {
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.MigrateDown(c)
-}
-
-// MigrateUp operation middleware
-func (siw *ServerInterfaceWrapper) MigrateUp(c *gin.Context) {
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.MigrateUp(c)
-}
-
 // ListRegisteredJobs operation middleware
 func (siw *ServerInterfaceWrapper) ListRegisteredJobs(c *gin.Context) {
 
@@ -730,8 +698,6 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/api/v1/cron/jobs", wrapper.ListJobs)
 	router.DELETE(options.BaseURL+"/api/v1/cron/jobs/:id", wrapper.DeleteJob)
 	router.GET(options.BaseURL+"/api/v1/cron/jobs/:id", wrapper.GetJobByID)
-	router.POST(options.BaseURL+"/api/v1/cron/migrate/down", wrapper.MigrateDown)
-	router.POST(options.BaseURL+"/api/v1/cron/migrate/up", wrapper.MigrateUp)
 	router.GET(options.BaseURL+"/api/v1/cron/registered-jobs", wrapper.ListRegisteredJobs)
 	router.GET(options.BaseURL+"/api/v1/cron/registered-jobs/:id", wrapper.GetRegisteredJob)
 	router.PATCH(options.BaseURL+"/api/v1/cron/registered-jobs/:id", wrapper.UpdateRegisteredJob)

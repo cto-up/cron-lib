@@ -1,5 +1,7 @@
+-- +goose Up
 -- Create update_modified_column function if it doesn't exist
 -- Use for test containers
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -7,6 +9,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- cron_jobs definition
 CREATE UNLOGGED TABLE cron_jobs (
@@ -35,3 +38,13 @@ CREATE TRIGGER update_cron_jobs_modtime
 BEFORE UPDATE ON cron_jobs
 FOR EACH ROW
 EXECUTE FUNCTION update_modified_column();
+
+-- +goose Down
+-- Drop trigger
+DROP TRIGGER IF EXISTS update_cron_jobs_modtime ON cron_jobs;
+
+-- Drop indexes
+DROP INDEX IF EXISTS idx_cron_jobs_tenant_id;
+
+-- Drop table
+DROP TABLE IF EXISTS cron_jobs;

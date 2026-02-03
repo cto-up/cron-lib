@@ -2,13 +2,11 @@ module github.com/cto-up/cron-lib
 
 go 1.25.4
 
-// replace ctoup.com/coreapp => ../core-be-lib
+replace ctoup.com/coreapp => ../core-be-lib
 
 require (
 	ctoup.com/coreapp v0.1.0
 	github.com/gin-gonic/gin v1.11.0
-	github.com/golang-migrate/migrate v3.5.4+incompatible // indirect
-	github.com/golang-migrate/migrate/v4 v4.18.2 // indirect
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/oapi-codegen/runtime v1.1.1
@@ -66,7 +64,7 @@ require (
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/tools v0.39.0 // indirect
 	google.golang.org/api v0.258.0 // indirect

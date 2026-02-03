@@ -18,7 +18,6 @@ type CronHandler struct {
 	authClientPool auth.AuthClientPool
 	store          *db.Store
 	*JobAuditLogHandler
-	*MigrationHandler
 	*SeedHandler
 	*RegisteredJobHandler
 }
@@ -31,7 +30,7 @@ func RegisterHandler(connPool *pgxpool.Pool, firebaseTenantClientPool auth.AuthC
 	// Start scheduler
 	jobManager.StartScheduler()
 
-	store := db.NewStore(connPool, false)
+	store := db.NewStore(connPool)
 	var middlewares []api.MiddlewareFunc
 	for _, mw := range openaiOptions.Middlewares {
 		middlewares = append(middlewares, api.MiddlewareFunc(mw))
@@ -45,7 +44,6 @@ func RegisterHandler(connPool *pgxpool.Pool, firebaseTenantClientPool auth.AuthC
 		store:                store,
 		authClientPool:       firebaseTenantClientPool,
 		JobAuditLogHandler:   newJobAuditLogHandler(store, firebaseTenantClientPool),
-		MigrationHandler:     newMigrationHandler(store),
 		SeedHandler:          newSeedHandler(service.NewSeedService(connPool)),
 		RegisteredJobHandler: newRegisteredJobHandler(store, firebaseTenantClientPool),
 	}

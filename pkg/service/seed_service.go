@@ -16,7 +16,7 @@ type SeedService struct {
 }
 
 func NewSeedService(connPool *pgxpool.Pool) *SeedService {
-	return &SeedService{store: db.NewStore(connPool, true), coreStore: dbCore.NewStore(connPool)}
+	return &SeedService{store: db.NewStore(connPool), coreStore: dbCore.NewStore(connPool)}
 }
 
 func (s *SeedService) SeedReferenceData(ctx context.Context, tenantID string) error {

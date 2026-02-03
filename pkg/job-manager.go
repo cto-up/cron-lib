@@ -91,7 +91,7 @@ func newJobManager(ctx context.Context, connPool *pgxpool.Pool) *JobManager {
 		jobs:       []Job{},
 		entryIDs:   make(map[string]cron.EntryID),
 		context:    ctx,
-		store:      db.NewStore(connPool, true),
+		store:      db.NewStore(connPool),
 		instanceID: instanceID,
 		isRunning:  false,
 	}
