@@ -2,10 +2,10 @@ module github.com/cto-up/cron-lib
 
 go 1.25.4
 
-replace ctoup.com/coreapp => ../core-be-lib
+// replace ctoup.com/coreapp => ../core-be-lib
 
 require (
-	ctoup.com/coreapp v0.1.0
+	ctoup.com/coreapp v0.1.3
 	github.com/gin-gonic/gin v1.11.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
