@@ -59,6 +59,14 @@ openapi:
 	oapi-codegen -config $(BASE_OPENAPI_CRON_DIR)/_oapi-schema-config.yaml $(BASE_OPENAPI_CRON_DIR)/cron-schema.yaml > api/openapi/cron-schema.go
 	oapi-codegen -config $(BASE_OPENAPI_CRON_DIR)/_oapi-service-config.yaml $(BASE_OPENAPI_CRON_DIR)/cron-api.yaml > api/openapi/cron-service.go
 
+update-core-backend:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION parameter is required. Use 'vx.x.x' format."; \
+		exit 1; \
+	fi
+	go get -u ctoup.com/coreapp@$(VERSION)
+
+
 release:
 	@echo "Creating release"
 	@if [ -z "$(VERSION)" ]; then \
@@ -71,4 +79,5 @@ include .env
 export $(shell sed 's/=.*//' .env)
 DB_CONNECTION = postgres://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_URL}
 
-.PHONY: postgresup postgresdown migratecreate migrateup migratedown sqlc test openapi build
+
+.PHONY: postgresup postgresdown migratecreate migrateup migratedown sqlc test openapi build update-core-backend
