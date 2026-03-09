@@ -69,7 +69,7 @@ func (j *ScheduledEchoJob) IsLongRunning() bool {
 func (j *ScheduledEchoJob) NextRunTime() time.Time {
 	nextTime, err := utils.NextRunTime(j.Schedule())
 	if err != nil {
-		log.Error().
+		logger.Error().
 			Str("tenant_id", j.tenantID).
 			Err(err).
 			Msg("Failed to parse cron schedule for scheduled posts job")
@@ -81,7 +81,7 @@ func (j *ScheduledEchoJob) NextRunTime() time.Time {
 
 // Run implements cron.Job
 func (j *ScheduledEchoJob) Run(ctx context.Context) error {
-	log.Info().
+	logger.Info().
 
 		Str("tenant_id", j.tenantID).
 		Str("msg", j.msg).
@@ -121,13 +121,13 @@ func NewEchoScheduler(connPool *pgxpool.Pool) *EchoScheduler {
 func (ps *EchoScheduler) AddTenantEchoJob(ctx context.Context, msg string, tenantID string) {
 	job := NewScheduledEchoJob(ps.connPool, msg, tenantID)
 	ps.scheduler.RegisterJob(job)
-	log.Info().Str("tenant_id", tenantID).Msg("Registered scheduled echo job for tenant")
+	logger.Info().Str("tenant_id", tenantID).Msg("Registered scheduled echo job for tenant")
 }
 
 // RemoveTenantEchoJob removes a scheduled post job for a tenant
 func (ps *EchoScheduler) RemoveTenantEchoJob(ctx context.Context, tenantID string) {
 	ps.scheduler.UnregisterJob("scheduled_echos", tenantID)
-	log.Info().Str("tenant_id", tenantID).Msg("Unregistered scheduled echo job for tenant")
+	logger.Info().Str("tenant_id", tenantID).Msg("Unregistered scheduled echo job for tenant")
 }
 
 ```
