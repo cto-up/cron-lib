@@ -233,21 +233,21 @@ func (h *RegisteredJobHandler) GetJobAuditLogs(c *gin.Context, jobID types.UUID,
 
 	// Convert to API response format
 	var apiAuditLogs []api.JobAuditLog
-	for _, log := range auditLogs {
+	for _, auditLog := range auditLogs {
 		apiAuditLog := api.JobAuditLog{
-			Id:            log.ID,
-			AppId:         log.AppID,
-			RequestId:     log.RequestID,
-			JobName:       log.JobName,
-			ScheduledTime: *util.FromNullableTimestamp(log.ScheduledTime),
-			StartTime:     util.FromNullableTimestamp(log.StartTime),
-			EndTime:       util.FromNullableTimestamp(log.EndTime),
-			Status:        log.Status,
-			Output:        util.FromNullableText(log.Output),
-			Error:         util.FromNullableText(log.Error),
-			TenantID:      log.TenantID,
-			CreatedAt:     log.CreatedAt.Time,
-			UpdatedAt:     util.FromNullableTimestamp(log.UpdatedAt),
+			Id:            auditLog.ID,
+			AppId:         auditLog.AppID,
+			RequestId:     auditLog.RequestID,
+			JobName:       auditLog.JobName,
+			ScheduledTime: *util.FromNullableTimestamp(auditLog.ScheduledTime),
+			StartTime:     util.FromNullableTimestamp(auditLog.StartTime),
+			EndTime:       util.FromNullableTimestamp(auditLog.EndTime),
+			Status:        auditLog.Status,
+			Output:        util.FromNullableText(auditLog.Output),
+			Error:         util.FromNullableText(auditLog.Error),
+			TenantID:      auditLog.TenantID,
+			CreatedAt:     auditLog.CreatedAt.Time,
+			UpdatedAt:     util.FromNullableTimestamp(auditLog.UpdatedAt),
 		}
 
 		apiAuditLogs = append(apiAuditLogs, apiAuditLog)
