@@ -42,7 +42,7 @@ REPLACE_STRING_1 := from \'core-fe-lib/openapi/core/core
 SEARCH_STRING_2 := from \'../core
 REPLACE_STRING_2 := from \'core-fe-lib/openapi/core/core
 
-BASE_OPENAPI_CRON_DIR := pkg/api/openapi
+BASE_OPENAPI_DIR := pkg/api/openapi
 
 build:
 	go build ./...
@@ -50,14 +50,14 @@ build:
 openapi:
 	@echo "Generating OpenAPI code"
 	@find $(BASE_API_FE_DIR) -type f -name "*.ts" -delete
-	openapi --input $(BASE_OPENAPI_CRON_DIR)/cron-api.yaml --output $(BASE_API_FE_DIR) --client axios
+	openapi --input $(BASE_OPENAPI_DIR)/cron-api.yaml --output $(BASE_API_FE_DIR) --client axios
 	@rm -rf $(BASE_API_FE_DIR)/$(MODULE)/core
 	@find $(BASE_API_FE_DIR)/$(MODULE) -name "*.ts" -type f -exec sed -i '' "s|$(SEARCH_STRING_1)|$(REPLACE_STRING_1)|g" {} +
 	@find $(BASE_API_FE_DIR)/$(MODULE) -name "*.ts" -type f -exec sed -i '' "s|$(SEARCH_STRING_2)|$(REPLACE_STRING_2)|g" {} +
 	@echo "Replacement complete."
 	
-	oapi-codegen -config $(BASE_OPENAPI_CRON_DIR)/_oapi-schema-config.yaml $(BASE_OPENAPI_CRON_DIR)/cron-schema.yaml > api/openapi/cron-schema.go
-	oapi-codegen -config $(BASE_OPENAPI_CRON_DIR)/_oapi-service-config.yaml $(BASE_OPENAPI_CRON_DIR)/cron-api.yaml > api/openapi/cron-service.go
+	oapi-codegen -config $(BASE_OPENAPI_DIR)/_oapi-schema-config.yaml $(BASE_OPENAPI_DIR)/cron-schema.yaml > api/openapi/cron-schema.go
+	oapi-codegen -config $(BASE_OPENAPI_DIR)/_oapi-service-config.yaml $(BASE_OPENAPI_DIR)/cron-api.yaml > api/openapi/cron-service.go
 
 update-core-backend:
 	@if [ -z "$(VERSION)" ]; then \
