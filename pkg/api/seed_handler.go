@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"ctoup.com/coreapp/pkg/shared/auth"
-	access "ctoup.com/coreapp/pkg/shared/service"
 	"ctoup.com/coreapp/pkg/shared/util"
 	"github.com/cto-up/cron-lib/pkg/service"
 	"github.com/gin-gonic/gin"
@@ -25,7 +24,7 @@ func newSeedHandler(seedService *service.SeedService) *SeedHandler {
 func (h *SeedHandler) SeedReferenceData(c *gin.Context) {
 	logger := util.GetLoggerFromCtx(c.Request.Context())
 	// Check if user has admin privileges
-	if !access.IsAdmin(c) {
+	if !auth.IsAdmin(c) {
 		logger.Error().Msg("User does not have admin privileges")
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admin privileges required"})
 		return
@@ -49,7 +48,7 @@ func (h *SeedHandler) SeedReferenceData(c *gin.Context) {
 func (h *SeedHandler) SeedSampleData(c *gin.Context) {
 	logger := util.GetLoggerFromCtx(c.Request.Context())
 	// Check if user has admin privileges
-	if !access.IsAdmin(c) {
+	if !auth.IsAdmin(c) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admin privileges required"})
 		return
 	}
