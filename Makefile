@@ -13,20 +13,6 @@ postgresup:
 postgresdown:
 	docker compose -f docker/postgresql.yml down
 
-migrateup:
-	@$(MAKE) migrate-module DIRECTION=up
-migrateup1:
-	@$(MAKE) migrate-module DIRECTION=up STEP=1
-migratedown:
-	@$(MAKE) migrate-module DIRECTION=down
-migratedown1:
-	@$(MAKE) migrate-module DIRECTION=down STEP=1
-
-migrate-module:
-	cd pkg/db; \
-	echo "I'm in pkg/db and $(DIRECTION) and $(STEP)"; \
-	migrate -path migration -database "${DB_CONNECTION}&x-migrations-table=cron_migrations" -verbose $(DIRECTION) $(STEP)
-
 sqlc:
 	cd pkg/db; echo "I'm in backend cron"; \
 	sqlc generate
@@ -80,4 +66,4 @@ export $(shell sed 's/=.*//' .env)
 DB_CONNECTION = postgres://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_URL}
 
 
-.PHONY: postgresup postgresdown migratecreate migrateup migratedown sqlc test openapi build update-core-backend
+.PHONY: postgresup postgresdown sqlc test openapi build update-core-backend
