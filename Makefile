@@ -19,7 +19,9 @@ sqlc:
 
 
 BASE_API_BE_DIR := api/openapi
-BASE_API_FE_DIR := ../cron-fe-lib
+# Frontend codegen lands in cron-fe-lib/lib/ — everything outside lib/ is
+# hand-authored (Vue feature module) and must not be wiped by this target.
+BASE_API_FE_DIR := ../cron-fe-lib/lib
 
 # Define the pattern to search for and replace
 SEARCH_STRING_1 := from \'./core
@@ -35,11 +37,11 @@ build:
 
 openapi:
 	@echo "Generating OpenAPI code"
-	@find $(BASE_API_FE_DIR) -type f -name "*.ts" -delete
+	@rm -rf $(BASE_API_FE_DIR)
 	openapi --input $(BASE_OPENAPI_DIR)/cron-api.yaml --output $(BASE_API_FE_DIR) --client axios
-	@rm -rf $(BASE_API_FE_DIR)/$(MODULE)/core
-	@find $(BASE_API_FE_DIR)/$(MODULE) -name "*.ts" -type f -exec sed -i '' "s|$(SEARCH_STRING_1)|$(REPLACE_STRING_1)|g" {} +
-	@find $(BASE_API_FE_DIR)/$(MODULE) -name "*.ts" -type f -exec sed -i '' "s|$(SEARCH_STRING_2)|$(REPLACE_STRING_2)|g" {} +
+	@rm -rf $(BASE_API_FE_DIR)/core
+	@find $(BASE_API_FE_DIR) -name "*.ts" -type f -exec sed -i '' "s|$(SEARCH_STRING_1)|$(REPLACE_STRING_1)|g" {} +
+	@find $(BASE_API_FE_DIR) -name "*.ts" -type f -exec sed -i '' "s|$(SEARCH_STRING_2)|$(REPLACE_STRING_2)|g" {} +
 	@echo "Replacement complete."
 	
 	oapi-codegen -config $(BASE_OPENAPI_DIR)/_oapi-schema-config.yaml $(BASE_OPENAPI_DIR)/cron-schema.yaml > api/openapi/cron-schema.go

@@ -20,7 +20,7 @@ func newSeedHandler(seedService *service.SeedService) *SeedHandler {
 	}
 }
 
-// SeedSkeellsCoachData implements the OpenAPI endpoint for seeding reference data
+// SeedReferenceData implements the OpenAPI endpoint for seeding reference data
 func (h *SeedHandler) SeedReferenceData(c *gin.Context) {
 	logger := util.GetLoggerFromCtx(c.Request.Context())
 	// Check if user has admin privileges
