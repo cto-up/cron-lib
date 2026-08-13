@@ -364,15 +364,6 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]CronJob, 
 	return items, nil
 }
 
-const releaseAdvisoryLock = `-- name: ReleaseAdvisoryLock :exec
-SELECT pg_advisory_unlock($1::bigint)
-`
-
-func (q *Queries) ReleaseAdvisoryLock(ctx context.Context, lockID int64) error {
-	_, err := q.db.Exec(ctx, releaseAdvisoryLock, lockID)
-	return err
-}
-
 const releaseTaskLock = `-- name: ReleaseTaskLock :exec
 UPDATE cron_jobs
 SET status = 'completed', 
@@ -391,17 +382,6 @@ type ReleaseTaskLockParams struct {
 func (q *Queries) ReleaseTaskLock(ctx context.Context, arg ReleaseTaskLockParams) error {
 	_, err := q.db.Exec(ctx, releaseTaskLock, arg.ID, arg.TenantID)
 	return err
-}
-
-const tryAdvisoryLock = `-- name: TryAdvisoryLock :one
-SELECT pg_try_advisory_lock($1::bigint) as lock_acquired
-`
-
-func (q *Queries) TryAdvisoryLock(ctx context.Context, lockID int64) (bool, error) {
-	row := q.db.QueryRow(ctx, tryAdvisoryLock, lockID)
-	var lock_acquired bool
-	err := row.Scan(&lock_acquired)
-	return lock_acquired, err
 }
 
 const updateJob = `-- name: UpdateJob :one
@@ -479,30 +459,44 @@ func (q *Queries) UpdateJobHeartbeat(ctx context.Context, arg UpdateJobHeartbeat
 	return err
 }
 
-const updateJobStatusToCompleted = `-- name: UpdateJobStatusToCompleted :exec
-UPDATE cron_jobs 
-SET status = 'completed', 
+const updateJobStatusToCompleted = `-- name: UpdateJobStatusToCompleted :execresult
+UPDATE cron_jobs
+SET status = 'completed',
     updated_at = NOW(),
     locked_by = NULL,
     locked_at = NULL
 WHERE id = $1::uuid
+  AND locked_by = $2::text
 `
 
-func (q *Queries) UpdateJobStatusToCompleted(ctx context.Context, jobID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, updateJobStatusToCompleted, jobID)
-	return err
+type UpdateJobStatusToCompletedParams struct {
+	JobID      uuid.UUID `json:"job_id"`
+	InstanceID string    `json:"instance_id"`
 }
 
-const updateJobStatusToFailed = `-- name: UpdateJobStatusToFailed :exec
-UPDATE cron_jobs 
-SET status = 'failed', 
+func (q *Queries) UpdateJobStatusToCompleted(ctx context.Context, arg UpdateJobStatusToCompletedParams) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, updateJobStatusToCompleted, arg.JobID, arg.InstanceID)
+}
+
+const updateJobStatusToFailed = `-- name: UpdateJobStatusToFailed :execresult
+
+UPDATE cron_jobs
+SET status = 'failed',
     updated_at = NOW(),
     locked_by = NULL,
     locked_at = NULL
 WHERE id = $1::uuid
+  AND locked_by = $2::text
 `
 
-func (q *Queries) UpdateJobStatusToFailed(ctx context.Context, jobID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, updateJobStatusToFailed, jobID)
-	return err
+type UpdateJobStatusToFailedParams struct {
+	JobID      uuid.UUID `json:"job_id"`
+	InstanceID string    `json:"instance_id"`
+}
+
+// The locked_by predicate fences the write: a run that overran the staleness
+// window has already lost the lease to another instance, and must not stamp its
+// outcome over the run that superseded it. Zero rows affected means exactly that.
+func (q *Queries) UpdateJobStatusToFailed(ctx context.Context, arg UpdateJobStatusToFailedParams) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, updateJobStatusToFailed, arg.JobID, arg.InstanceID)
 }

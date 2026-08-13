@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/robfig/cron/v3"
@@ -399,40 +400,14 @@ func (jm *JobManager) executeJobWithLock(job Job) {
 		// Continue execution even if audit logging fails
 	}
 
-	// Use PostgreSQL advisory lock to prevent concurrent execution
-	lockID := int64(jobLockToLockID(lock, tenantID))
+	// Mutual exclusion across instances is the cron_jobs row lock below, not a
+	// session-scoped pg advisory lock: every query here goes through the pool, so
+	// an advisory lock taken on one connection is unreleasable from another.
 
-	// Try to acquire an advisory lock with timeout
-	ctx, cancel := context.WithTimeout(jm.context, 60*time.Second)
-	defer cancel()
-
-	// Try to acquire advisory lock using sqlc
-	lockResult, err := jm.store.TryAdvisoryLock(ctx, lockID)
-	if err != nil {
-		log.Printf("Error acquiring lock for job %s (tenant %s): %v", jobName, tenantID, err)
-		errorMsg := err.Error()
-		jm.updateAuditLogStatus(auditLog.ID, "failed", nil, &errorMsg, tenantID)
-		return
-	}
-
-	if !lockResult {
-		log.Printf("Job %s for tenant %s is already running in another instance", jobName, tenantID)
-		errorMsg := "Job already running in another instance"
-		jm.updateAuditLogStatus(auditLog.ID, "skipped", nil, &errorMsg, tenantID)
-		return
-	}
-
-	// Ensure advisory lock is released even in case of panic
-	defer func() {
-		// Release advisory lock using sqlc
-		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer releaseCancel()
-
-		err := jm.store.ReleaseAdvisoryLock(releaseCtx, lockID)
-		if err != nil {
-			log.Printf("Error releasing lock for job %s (tenant %s): %v", jobName, tenantID, err)
-		}
-	}()
+	// Bounded to the lock acquisition alone — the post-run writes get their own
+	// context so a job outliving this deadline can still record its outcome.
+	lockCtx, lockCancel := context.WithTimeout(jm.context, 60*time.Second)
+	defer lockCancel()
 
 	// Try to acquire the job lock in the database
 	nextRunTime := job.NextRunTime()
@@ -447,7 +422,7 @@ func (jm *JobManager) executeJobWithLock(job Job) {
 		InstanceID:  jm.instanceID,
 	}
 
-	jobID, err := jm.store.AcquireJobLockInDB(ctx, acquireParams)
+	jobID, err := jm.store.AcquireJobLockInDB(lockCtx, acquireParams)
 	if err != nil {
 		// Check for "no rows" error which indicates the ON CONFLICT WHERE clause wasn't satisfied
 		if pgx.ErrNoRows.Error() == err.Error() {
@@ -462,20 +437,13 @@ func (jm *JobManager) executeJobWithLock(job Job) {
 		return
 	}
 
-	// **START HEARTBEAT FOR LONG-RUNNING JOBS**
-	var heartbeatStop chan struct{}
-	if job.IsLongRunning() {
-		heartbeatStop = make(chan struct{})
-		go jm.startHeartbeat(jobID, heartbeatStop)
-		log.Printf("Started heartbeat for long-running job %s (tenant %s)", jobName, tenantID)
-	}
-
-	// **STOP HEARTBEAT ON COMPLETION**
-	defer func() {
-		if heartbeatStop != nil {
-			close(heartbeatStop)
-		}
-	}()
+	// Heartbeat every run, not only the ones declaring IsLongRunning: locked_at is
+	// what the staleness window in AcquireJobLockInDB tests, so a job that is
+	// usually quick but occasionally exceeds 10 minutes would otherwise have its
+	// lease taken by a second instance and run concurrently with itself.
+	heartbeatStop := make(chan struct{})
+	go jm.startHeartbeat(jobID, heartbeatStop)
+	defer close(heartbeatStop)
 
 	// Add panic recovery to ensure job status is updated even if job panics
 	defer func() {
@@ -486,10 +454,7 @@ func (jm *JobManager) executeJobWithLock(job Job) {
 			updateCtx, updateCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer updateCancel()
 
-			err = jm.store.UpdateJobStatusToFailed(updateCtx, jobID)
-			if err != nil {
-				log.Printf("Error updating job status to failed after panic: %v", err)
-			}
+			jm.finishJob(updateCtx, jobID, jobName, tenantID, true)
 
 			// Update audit log with panic information
 			errorMsg := fmt.Sprintf("Panic: %v", r)
@@ -501,14 +466,18 @@ func (jm *JobManager) executeJobWithLock(job Job) {
 	var output string
 	var jobErr error
 
-	if jobErr = job.Run(jm.context); jobErr != nil {
+	jobErr = job.Run(jm.context)
+
+	// The job has just outlived lockCtx if it ran longer than a minute, and
+	// jm.context is cancelled on shutdown — either would leave the row stuck at
+	// 'running' until the stale-lock sweep. Record the outcome on its own context.
+	finishCtx, finishCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer finishCancel()
+
+	if jobErr != nil {
 		log.Printf("Error in job %s (tenant %s): %v", jobName, tenantID, jobErr)
 
-		// Update status to failed using sqlc
-		err = jm.store.UpdateJobStatusToFailed(ctx, jobID)
-		if err != nil {
-			log.Printf("Error updating job status to failed: %v", err)
-		}
+		jm.finishJob(finishCtx, jobID, jobName, tenantID, true)
 
 		// Update audit log with error information
 		errorMsg := jobErr.Error()
@@ -516,11 +485,7 @@ func (jm *JobManager) executeJobWithLock(job Job) {
 	} else {
 		log.Printf("Job %s for tenant %s executed successfully", jobName, tenantID)
 
-		// Update status to completed using sqlc
-		err = jm.store.UpdateJobStatusToCompleted(ctx, jobID)
-		if err != nil {
-			log.Printf("Error updating job status to completed: %v", err)
-		}
+		jm.finishJob(finishCtx, jobID, jobName, tenantID, false)
 
 		// Update audit log with success information
 		output = "Job completed successfully"
@@ -529,13 +494,13 @@ func (jm *JobManager) executeJobWithLock(job Job) {
 
 	// Periodically clean up old completed tasks
 	if jobName == "system.cleanup" || now.Minute() == 0 { // Run on the hour or with dedicated cleanup job
-		_, err := jm.store.CleanupOldTasks(ctx, tenantID)
+		_, err := jm.store.CleanupOldTasks(finishCtx, tenantID)
 		if err != nil {
 			log.Printf("Error cleaning up old tasks for tenant %s: %v", tenantID, err)
 		}
 
 		// Clean up stale locks
-		result, err := jm.store.CleanupStaleLocks(ctx, tenantID)
+		result, err := jm.store.CleanupStaleLocks(finishCtx, tenantID)
 		if err != nil {
 			log.Printf("Error cleaning up stale locks for tenant %s: %v", tenantID, err)
 		} else if rowsAffected := result.RowsAffected(); rowsAffected > 0 {
@@ -543,12 +508,45 @@ func (jm *JobManager) executeJobWithLock(job Job) {
 		}
 
 		// Clean up stale registered jobs
-		result, err = jm.store.CleanupStaleRegisteredJobs(ctx, tenantID)
+		result, err = jm.store.CleanupStaleRegisteredJobs(finishCtx, tenantID)
 		if err != nil {
 			log.Printf("Error cleaning up stale registered jobs for tenant %s: %v", tenantID, err)
 		} else if rowsAffected := result.RowsAffected(); rowsAffected > 0 {
 			log.Printf("Cleaned up %d stale registered jobs for tenant %s", rowsAffected, tenantID)
 		}
+	}
+}
+
+// finishJob records the terminal status and releases the lease. The write is
+// fenced on instance ID, so it is a no-op if this run overran the staleness
+// window and another instance already took the job over. That is logged rather
+// than swallowed: it means the job ran twice concurrently, which the heartbeat
+// exists to prevent.
+func (jm *JobManager) finishJob(ctx context.Context, jobID uuid.UUID, jobName, tenantID string, failed bool) {
+	var tag pgconn.CommandTag
+	var err error
+
+	status := "completed"
+	if failed {
+		status = "failed"
+		tag, err = jm.store.UpdateJobStatusToFailed(ctx, repository.UpdateJobStatusToFailedParams{
+			JobID:      jobID,
+			InstanceID: jm.instanceID,
+		})
+	} else {
+		tag, err = jm.store.UpdateJobStatusToCompleted(ctx, repository.UpdateJobStatusToCompletedParams{
+			JobID:      jobID,
+			InstanceID: jm.instanceID,
+		})
+	}
+
+	if err != nil {
+		log.Printf("Error updating job %s (tenant %s) status to %s: %v", jobName, tenantID, status, err)
+		return
+	}
+
+	if tag.RowsAffected() == 0 {
+		log.Printf("Job %s (tenant %s) finished %s but had already lost its lease to another instance", jobName, tenantID, status)
 	}
 }
 
@@ -590,17 +588,4 @@ func (jm *JobManager) updateAuditLogStatus(auditLogID uuid.UUID, status string, 
 // jobKey creates a unique key for a job based on name and tenant
 func jobKey(name, tenantID string) string {
 	return fmt.Sprintf("%s:%s", tenantID, name)
-}
-
-// jobLockToLockID converts a job name and tenant ID to a consistent lock ID
-func jobLockToLockID(jobName, tenantID string) uint32 {
-	// Combine job name and tenant ID to create a unique key
-	key := jobKey(jobName, tenantID)
-
-	// Simple hash function to convert string to uint32
-	var hash uint32 = 5381
-	for _, c := range key {
-		hash = (hash << 5) + hash + uint32(c)
-	}
-	return hash
 }

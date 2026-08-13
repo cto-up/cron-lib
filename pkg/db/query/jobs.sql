@@ -65,27 +65,27 @@ WHERE status IN ('completed', 'failed')
   AND updated_at < NOW() - INTERVAL '7 days'
   AND tenant_id = sqlc.arg('tenant_id')::text;
 
--- name: TryAdvisoryLock :one
-SELECT pg_try_advisory_lock(sqlc.arg('lock_id')::bigint) as lock_acquired;
+-- The locked_by predicate fences the write: a run that overran the staleness
+-- window has already lost the lease to another instance, and must not stamp its
+-- outcome over the run that superseded it. Zero rows affected means exactly that.
 
--- name: ReleaseAdvisoryLock :exec
-SELECT pg_advisory_unlock(sqlc.arg('lock_id')::bigint);
-
--- name: UpdateJobStatusToFailed :exec
-UPDATE cron_jobs 
-SET status = 'failed', 
+-- name: UpdateJobStatusToFailed :execresult
+UPDATE cron_jobs
+SET status = 'failed',
     updated_at = NOW(),
     locked_by = NULL,
     locked_at = NULL
-WHERE id = sqlc.arg('job_id')::uuid;
+WHERE id = sqlc.arg('job_id')::uuid
+  AND locked_by = sqlc.arg('instance_id')::text;
 
--- name: UpdateJobStatusToCompleted :exec
-UPDATE cron_jobs 
-SET status = 'completed', 
+-- name: UpdateJobStatusToCompleted :execresult
+UPDATE cron_jobs
+SET status = 'completed',
     updated_at = NOW(),
     locked_by = NULL,
     locked_at = NULL
-WHERE id = sqlc.arg('job_id')::uuid;
+WHERE id = sqlc.arg('job_id')::uuid
+  AND locked_by = sqlc.arg('instance_id')::text;
 
 -- name: AcquireJobLockInDB :one
 INSERT INTO cron_jobs (
