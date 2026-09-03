@@ -21,7 +21,13 @@ sqlc:
 BASE_API_BE_DIR := api/openapi
 # Frontend codegen lands in cron-fe-lib/lib/ — everything outside lib/ is
 # hand-authored (Vue feature module) and must not be wiped by this target.
-BASE_API_FE_DIR := ../cron-fe-lib/lib
+# The frontend client is generated into the copy you can TEST — hub's
+# submodule — not the sibling clone no consumer builds. Overridable for a
+# checkout somewhere else. Only lib/ is wiped; everything beside it is
+# hand-authored.
+FE_LIB_NAME := cron-fe-lib
+BASE_FE_DIR ?= ../hub/frontend/$(FE_LIB_NAME)
+BASE_API_FE_DIR := $(BASE_FE_DIR)/lib
 
 # Define the pattern to search for and replace
 SEARCH_STRING_1 := from \'./core
@@ -35,7 +41,7 @@ BASE_OPENAPI_DIR := pkg/api/openapi
 build:
 	go build ./...
 
-openapi:
+openapi: check-fe-checkout
 	@echo "Generating OpenAPI code"
 	@rm -rf $(BASE_API_FE_DIR)
 	openapi --input $(BASE_OPENAPI_DIR)/cron-api.yaml --output $(BASE_API_FE_DIR) --client axios
@@ -68,7 +74,7 @@ export $(shell sed 's/=.*//' .env)
 DB_CONNECTION = postgres://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_URL}
 
 
-.PHONY: postgresup postgresdown sqlc test openapi build update-core-backend
+.PHONY: check-fe-checkout postgresup postgresdown sqlc test openapi build update-core-backend
 
 # Library migrations are 16 digits: YYYYMMDDHHMMSS + source id 02. Consumers
 # flatten every library's migrations and their own modules into ONE goose
@@ -86,3 +92,27 @@ new-migration: ## Create a goose migration (NAME=<snake_case>)
 	printf -- '-- +goose Up\n\n\n-- +goose Down\n\n' > "$$FILE"; \
 	echo "Created $$FILE"
 	@./scripts/check-migration-versions.sh
+
+# The generator writes into a git checkout that must be able to PUSH what it
+# produces. A submodule is detached by default, and a client generated onto a
+# detached HEAD is a client nobody else can ever receive.
+check-fe-checkout:
+	@test -e $(BASE_FE_DIR)/.git || { \
+		echo "ERROR: $(BASE_FE_DIR) is not a checkout."; \
+		echo "       Run: git -C ../hub submodule update --init frontend/$(FE_LIB_NAME)"; \
+		exit 1; }
+	@cd $(BASE_FE_DIR) && git fetch -q origin 2>/dev/null || true
+	@cd $(BASE_FE_DIR) && \
+		branch=$$(git symbolic-ref --quiet --short HEAD || echo DETACHED); \
+		if [ "$$branch" = "DETACHED" ]; then \
+			echo "ERROR: $(BASE_FE_DIR) is on a detached HEAD, so what you generate cannot be pushed."; \
+			echo "       Run: make -C ../hub libs-attach"; \
+			exit 1; \
+		fi; \
+		behind=$$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0); \
+		if [ "$$behind" != "0" ]; then \
+			echo "ERROR: $(BASE_FE_DIR) is $$behind commit(s) behind origin/main."; \
+			echo "       Generating here would build a client against stale source."; \
+			echo "       Run: cd $(BASE_FE_DIR) && git pull --ff-only"; \
+			exit 1; \
+		fi
