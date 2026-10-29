@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"net/http"
 
 	"ctoup.com/coreapp/pkg/shared/auth"
@@ -27,7 +26,7 @@ type JobAuditLogHandler struct {
 func (h *JobAuditLogHandler) DeleteJobAuditLog(c *gin.Context, id types.UUID) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, helpers.ErrorStringResponse("tenant ID missing from the request context: the tenant middleware did not run"))
 		return
 	}
 	_, err := h.store.DeleteJobAuditLog(c, repository.DeleteJobAuditLogParams{
@@ -45,7 +44,7 @@ func (h *JobAuditLogHandler) DeleteJobAuditLog(c *gin.Context, id types.UUID) {
 func (h *JobAuditLogHandler) GetJobAuditLogByID(c *gin.Context, id types.UUID) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, helpers.ErrorStringResponse("tenant ID missing from the request context: the tenant middleware did not run"))
 		return
 	}
 	jobAuditLog, err := h.store.GetJobAuditLogByID(c, repository.GetJobAuditLogByIDParams{
@@ -68,7 +67,7 @@ func (h *JobAuditLogHandler) GetJobAuditLogByID(c *gin.Context, id types.UUID) {
 func (h *JobAuditLogHandler) ListJobAuditLogs(c *gin.Context, params api.ListJobAuditLogsParams) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, helpers.ErrorStringResponse("tenant ID missing from the request context: the tenant middleware did not run"))
 		return
 	}
 	pagingRequest := helpers.PagingRequest{

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"net/http"
 
 	"ctoup.com/coreapp/pkg/shared/auth"
@@ -31,7 +30,7 @@ func (h *SeedHandler) SeedReferenceData(c *gin.Context) {
 	}
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant ID missing from the request context: the tenant middleware did not run"})
 		return
 	}
 
@@ -55,7 +54,7 @@ func (h *SeedHandler) SeedSampleData(c *gin.Context) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
 		logger.Error().Msg("TenantID not found")
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant ID missing from the request context: the tenant middleware did not run"})
 		return
 	}
 

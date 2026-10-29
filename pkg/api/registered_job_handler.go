@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -12,8 +13,19 @@ import (
 	"github.com/cto-up/cron-lib/pkg/db"
 	"github.com/cto-up/cron-lib/pkg/db/repository"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/oapi-codegen/runtime/types"
 )
+
+// registeredJobLookupError tells a missing row apart from a failed query: a
+// database outage must not be reported to the admin as "job not found".
+func registeredJobLookupError(c *gin.Context, jobID types.UUID, err error) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("registered job %s not found in this tenant", jobID)})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("loading registered job %s: %v", jobID, err)})
+}
 
 type RegisteredJobHandler struct {
 	store          *db.Store
@@ -31,7 +43,7 @@ func newRegisteredJobHandler(store *db.Store, authClientPool auth.AuthClientPool
 func (h *RegisteredJobHandler) ListRegisteredJobs(c *gin.Context, params api.ListRegisteredJobsParams) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant ID missing from the request context: the tenant middleware did not run"})
 		return
 	}
 
@@ -94,7 +106,7 @@ func (h *RegisteredJobHandler) ListRegisteredJobs(c *gin.Context, params api.Lis
 func (h *RegisteredJobHandler) GetRegisteredJob(c *gin.Context, jobID types.UUID) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant ID missing from the request context: the tenant middleware did not run"})
 		return
 	}
 
@@ -104,7 +116,7 @@ func (h *RegisteredJobHandler) GetRegisteredJob(c *gin.Context, jobID types.UUID
 		TenantID: tenantID.(string),
 	})
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
+		registeredJobLookupError(c, jobID, err)
 		return
 	}
 
@@ -129,7 +141,7 @@ func (h *RegisteredJobHandler) GetRegisteredJob(c *gin.Context, jobID types.UUID
 func (h *RegisteredJobHandler) UpdateRegisteredJob(c *gin.Context, jobID types.UUID) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant ID missing from the request context: the tenant middleware did not run"})
 		return
 	}
 
@@ -144,13 +156,17 @@ func (h *RegisteredJobHandler) UpdateRegisteredJob(c *gin.Context, jobID types.U
 
 	// Update job in database
 	if req.IsEnabled != nil {
-		_, err := h.store.UpdateRegisteredJobEnabled(c, repository.UpdateRegisteredJobEnabledParams{
+		tag, err := h.store.UpdateRegisteredJobEnabled(c, repository.UpdateRegisteredJobEnabledParams{
 			ID:        jobID,
 			TenantID:  tenantID.(string),
 			IsEnabled: *req.IsEnabled,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("setting is_enabled on registered job %s: %v", jobID, err)})
+			return
+		}
+		if tag.RowsAffected() == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("registered job %s not found in this tenant; is_enabled was not changed", jobID)})
 			return
 		}
 	}
@@ -161,7 +177,7 @@ func (h *RegisteredJobHandler) UpdateRegisteredJob(c *gin.Context, jobID types.U
 		TenantID: tenantID.(string),
 	})
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
+		registeredJobLookupError(c, jobID, err)
 		return
 	}
 
@@ -186,7 +202,7 @@ func (h *RegisteredJobHandler) UpdateRegisteredJob(c *gin.Context, jobID types.U
 func (h *RegisteredJobHandler) GetJobAuditLogs(c *gin.Context, jobID types.UUID, params api.GetJobAuditLogsParams) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant ID missing from the request context: the tenant middleware did not run"})
 		return
 	}
 
@@ -196,13 +212,21 @@ func (h *RegisteredJobHandler) GetJobAuditLogs(c *gin.Context, jobID types.UUID,
 		TenantID: tenantID.(string),
 	})
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
+		registeredJobLookupError(c, jobID, err)
 		return
 	}
 
 	// Parse pagination parameters
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("page must be a positive integer, got %q", c.Query("page"))})
+		return
+	}
+	pageSize, err := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	if err != nil || pageSize < 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("pageSize must be a positive integer, got %q", c.Query("pageSize"))})
+		return
+	}
 	sortBy := c.DefaultQuery("sortBy", "start_time")
 	order := c.DefaultQuery("order", "desc")
 

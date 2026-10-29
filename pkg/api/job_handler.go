@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"net/http"
 
 	"ctoup.com/coreapp/pkg/shared/auth"
@@ -21,7 +20,7 @@ import (
 func (h *CronHandler) DeleteJob(c *gin.Context, id types.UUID) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, helpers.ErrorStringResponse("tenant ID missing from the request context: the tenant middleware did not run"))
 		return
 	}
 	_, err := h.store.DeleteJob(c, repository.DeleteJobParams{
@@ -39,7 +38,7 @@ func (h *CronHandler) DeleteJob(c *gin.Context, id types.UUID) {
 func (h *CronHandler) GetJobByID(c *gin.Context, id types.UUID, params api.GetJobByIDParams) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, helpers.ErrorStringResponse("tenant ID missing from the request context: the tenant middleware did not run"))
 		return
 	}
 	job, err := h.store.GetJobByID(c, repository.GetJobByIDParams{
@@ -62,7 +61,7 @@ func (h *CronHandler) GetJobByID(c *gin.Context, id types.UUID, params api.GetJo
 func (h *CronHandler) ListJobs(c *gin.Context, params api.ListJobsParams) {
 	tenantID, exists := c.Get(auth.AUTH_TENANT_ID_KEY)
 	if !exists {
-		c.JSON(http.StatusInternalServerError, errors.New("TenantID not found"))
+		c.JSON(http.StatusInternalServerError, helpers.ErrorStringResponse("tenant ID missing from the request context: the tenant middleware did not run"))
 		return
 	}
 	pagingRequest := helpers.PagingRequest{
