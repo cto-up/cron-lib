@@ -1,8 +1,10 @@
 
+-- is_enabled only seeds a NEW row: on conflict it is left alone, because it is
+-- the admin's decision and every restart re-registers every job.
 -- name: UpsertRegisteredJob :one
 INSERT INTO cron_registered_jobs (
-  job_name, schedule, is_long_running, is_enabled, 
-  last_registered_at, instance_id, tenant_id
+  job_name, schedule, is_long_running, is_enabled,
+  last_registered_at, instance_id, tenant_id, registration_error
 ) VALUES (
   sqlc.arg('job_name')::text,
   sqlc.arg('schedule')::text,
@@ -10,17 +12,24 @@ INSERT INTO cron_registered_jobs (
   sqlc.arg('is_enabled')::boolean,
   NOW(),
   sqlc.arg('instance_id')::text,
-  sqlc.arg('tenant_id')::text
+  sqlc.arg('tenant_id')::text,
+  sqlc.narg('registration_error')::text
 )
 ON CONFLICT (tenant_id, job_name) DO UPDATE
-SET 
+SET
   schedule = EXCLUDED.schedule,
   is_long_running = EXCLUDED.is_long_running,
-  is_enabled = EXCLUDED.is_enabled,
   last_registered_at = NOW(),
   instance_id = EXCLUDED.instance_id,
+  registration_error = EXCLUDED.registration_error,
   updated_at = NOW()
 RETURNING *;
+
+-- name: GetRegisteredJobEnabled :one
+SELECT is_enabled
+FROM cron_registered_jobs
+WHERE tenant_id = sqlc.arg('tenant_id')::text
+  AND job_name = sqlc.arg('job_name')::text;
 
 -- name: ListRegisteredJobs :many
 SELECT rj.*, 
@@ -83,9 +92,12 @@ FROM cron_job_audit_logs
 WHERE job_name = sqlc.arg('job_name')::text
   AND tenant_id = sqlc.arg('tenant_id')::text;
 
+-- A disabled row is kept: deleting it would forget the admin's decision, and
+-- the next registration would recreate the job enabled.
 -- name: CleanupStaleRegisteredJobs :execresult
 DELETE FROM cron_registered_jobs
 WHERE last_registered_at < NOW() - INTERVAL '24 hours'
+  AND is_enabled
   AND tenant_id = sqlc.arg('tenant_id')::text;
 
 -- name: DeleteRegisteredJob :exec

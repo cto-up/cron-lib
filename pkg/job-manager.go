@@ -2,6 +2,7 @@ package cron
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -98,71 +99,106 @@ func newJobManager(ctx context.Context, connPool *pgxpool.Pool) *JobManager {
 	}
 }
 
-// RegisterJob adds a job to the job manager
+// scheduleParser is the parser cron.WithSeconds installs, so a schedule
+// validated here is exactly one AddFunc accepts.
+var scheduleParser = cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+
+// RegisterJob adds a job to the job manager. A failure is logged and recorded
+// on the job's cron_registered_jobs row; use Register to receive it as an error.
 func (jm *JobManager) RegisterJob(job Job) {
-	jm.mutex.Lock()
-	defer jm.mutex.Unlock()
-
-	// Check if job already exists
-	key := jobKey(job.Name(), job.TenantID())
-	for _, existingJob := range jm.jobs {
-		if jobKey(existingJob.Name(), existingJob.TenantID()) == key {
-			log.Printf("Job %s for tenant %s already registered", job.Name(), job.TenantID())
-			return
-		}
-	}
-
-	// Add job to slice
-	jm.jobs = append(jm.jobs, job)
-
-	// Register job in database
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Extract job details
-	jobName := job.Name()
-	tenantID := job.TenantID()
-	schedule := job.Schedule()
-	isLongRunning := job.IsLongRunning()
-
-	// Register job in database
-	params := repository.UpsertRegisteredJobParams{
-		JobName:       jobName,
-		Schedule:      schedule,
-		IsLongRunning: isLongRunning,
-		IsEnabled:     true, // Default to enabled
-		InstanceID:    jm.instanceID,
-		TenantID:      tenantID,
-	}
-
-	_, err := jm.store.UpsertRegisteredJob(ctx, params)
-	if err != nil {
-		log.Printf("Error registering job %s (tenant %s) in database: %v", jobName, tenantID, err)
-		// Continue even if registration fails
-	}
-
-	// If scheduler is already running, add job to cron
-	if jm.isRunning {
-		jm.scheduleJob(job)
+	if err := jm.Register(job); err != nil {
+		log.Printf("Error registering job: %v", err)
 	}
 }
 
-// scheduleJob adds a job to the cron scheduler
-func (jm *JobManager) scheduleJob(job Job) {
-	schedule := job.Schedule()
-	entryID, err := jm.cron.AddFunc(schedule, func() {
-		jm.executeJobWithLock(job)
-	})
+// Register adds a job to the job manager. A schedule the cron parser rejects is
+// refused: the job is not scheduled, the reason is stored as registration_error
+// on its cron_registered_jobs row, and it is returned. A failure to write that
+// row is returned too, though a valid job is still scheduled.
+func (jm *JobManager) Register(job Job) error {
+	jm.mutex.Lock()
+	defer jm.mutex.Unlock()
 
-	if err != nil {
-		log.Printf("Failed to schedule job %s: %v", job.Name(), err)
-		return
+	jobName := job.Name()
+	tenantID := job.TenantID()
+	schedule := job.Schedule()
+
+	key := jobKey(jobName, tenantID)
+	for _, existingJob := range jm.jobs {
+		if jobKey(existingJob.Name(), existingJob.TenantID()) == key {
+			log.Printf("Job %s for tenant %s already registered", jobName, tenantID)
+			return nil
+		}
 	}
 
-	// Store the entry ID for later removal if needed
+	var scheduleErr error
+	if _, err := scheduleParser.Parse(schedule); err != nil {
+		scheduleErr = fmt.Errorf("job %s (tenant %s) not scheduled: invalid cron schedule %q: %w", jobName, tenantID, schedule, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	params := repository.UpsertRegisteredJobParams{
+		JobName:       jobName,
+		Schedule:      schedule,
+		IsLongRunning: job.IsLongRunning(),
+		IsEnabled:     true, // only for a new row; an existing row keeps the admin's choice
+		InstanceID:    jm.instanceID,
+		TenantID:      tenantID,
+	}
+	if scheduleErr != nil {
+		params.RegistrationError = pgtype.Text{String: scheduleErr.Error(), Valid: true}
+	}
+
+	var recordErr error
+	if _, err := jm.store.UpsertRegisteredJob(ctx, params); err != nil {
+		recordErr = fmt.Errorf("job %s (tenant %s): recording registration in cron_registered_jobs: %w", jobName, tenantID, err)
+	}
+
+	if scheduleErr != nil {
+		return errors.Join(scheduleErr, recordErr)
+	}
+
+	jm.jobs = append(jm.jobs, job)
+
+	if jm.isRunning {
+		if err := jm.scheduleJob(job); err != nil {
+			return errors.Join(err, recordErr)
+		}
+	}
+	return recordErr
+}
+
+// scheduleJob adds a job to the cron scheduler
+func (jm *JobManager) scheduleJob(job Job) error {
+	entryID, err := jm.cron.AddFunc(job.Schedule(), func() {
+		jm.executeJobWithLock(job)
+	})
+	if err != nil {
+		return fmt.Errorf("job %s (tenant %s) not scheduled: %w", job.Name(), job.TenantID(), err)
+	}
+
 	key := jobKey(job.Name(), job.TenantID())
 	jm.entryIDs[key] = entryID
 	log.Printf("Job %s for tenant %s scheduled with ID %v", job.Name(), job.TenantID(), entryID)
+	return nil
+}
+
+// jobEnabled reports the admin's is_enabled switch for the job. A job with no
+// registered row (its registration write failed, or it predates the table) runs.
+func (jm *JobManager) jobEnabled(ctx context.Context, job Job) (bool, error) {
+	enabled, err := jm.store.GetRegisteredJobEnabled(ctx, repository.GetRegisteredJobEnabledParams{
+		TenantID: job.TenantID(),
+		JobName:  job.Name(),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("checking whether job %s (tenant %s) is enabled: %w", job.Name(), job.TenantID(), err)
+	}
+	return enabled, nil
 }
 
 // UnregisterJob removes a job from the job manager
@@ -221,7 +257,9 @@ func (jm *JobManager) StartScheduler() {
 
 	// Schedule all jobs
 	for _, job := range jm.jobs {
-		jm.scheduleJob(job)
+		if err := jm.scheduleJob(job); err != nil {
+			log.Printf("Error starting scheduler: %v", err)
+		}
 	}
 
 	// Start the cron scheduler
@@ -371,6 +409,15 @@ func (jm *JobManager) executeJobWithLock(job Job) {
 	lock := job.Lock()
 	tenantID := job.TenantID()
 
+	// Checked before the audit entry so a disabled job does not log a row per tick.
+	enabledCtx, enabledCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	enabled, enabledErr := jm.jobEnabled(enabledCtx, job)
+	enabledCancel()
+	if enabledErr == nil && !enabled {
+		log.Printf("Job %s for tenant %s is disabled; skipping this run", jobName, tenantID)
+		return
+	}
+
 	// Generate a request ID for tracking this job execution
 	requestID := uuid.New().String()
 
@@ -398,6 +445,13 @@ func (jm *JobManager) executeJobWithLock(job Job) {
 	if err != nil {
 		log.Printf("Error creating audit log for job %s (tenant %s): %v", jobName, tenantID, err)
 		// Continue execution even if audit logging fails
+	}
+
+	if enabledErr != nil {
+		log.Printf("Not running job %s (tenant %s): %v", jobName, tenantID, enabledErr)
+		errorMsg := enabledErr.Error()
+		jm.updateAuditLogStatus(auditLog.ID, "failed", nil, &errorMsg, tenantID)
+		return
 	}
 
 	// Mutual exclusion across instances is the cron_jobs row lock below, not a

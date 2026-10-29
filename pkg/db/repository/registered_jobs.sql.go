@@ -11,14 +11,18 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const cleanupStaleRegisteredJobs = `-- name: CleanupStaleRegisteredJobs :execresult
 DELETE FROM cron_registered_jobs
 WHERE last_registered_at < NOW() - INTERVAL '24 hours'
+  AND is_enabled
   AND tenant_id = $1::text
 `
 
+// A disabled row is kept: deleting it would forget the admin's decision, and
+// the next registration would recreate the job enabled.
 func (q *Queries) CleanupStaleRegisteredJobs(ctx context.Context, tenantID string) (pgconn.CommandTag, error) {
 	return q.db.Exec(ctx, cleanupStaleRegisteredJobs, tenantID)
 }
@@ -78,7 +82,7 @@ func (q *Queries) DeleteRegisteredJob(ctx context.Context, arg DeleteRegisteredJ
 }
 
 const getRegisteredJobByID = `-- name: GetRegisteredJobByID :one
-SELECT id, job_name, schedule, is_long_running, is_enabled, last_registered_at, instance_id, tenant_id, created_at, updated_at 
+SELECT id, job_name, schedule, is_long_running, is_enabled, last_registered_at, instance_id, tenant_id, created_at, updated_at, registration_error 
 FROM cron_registered_jobs
 WHERE id = $1::uuid
   AND tenant_id = $2::text
@@ -103,8 +107,28 @@ func (q *Queries) GetRegisteredJobByID(ctx context.Context, arg GetRegisteredJob
 		&i.TenantID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RegistrationError,
 	)
 	return i, err
+}
+
+const getRegisteredJobEnabled = `-- name: GetRegisteredJobEnabled :one
+SELECT is_enabled
+FROM cron_registered_jobs
+WHERE tenant_id = $1::text
+  AND job_name = $2::text
+`
+
+type GetRegisteredJobEnabledParams struct {
+	TenantID string `json:"tenant_id"`
+	JobName  string `json:"job_name"`
+}
+
+func (q *Queries) GetRegisteredJobEnabled(ctx context.Context, arg GetRegisteredJobEnabledParams) (bool, error) {
+	row := q.db.QueryRow(ctx, getRegisteredJobEnabled, arg.TenantID, arg.JobName)
+	var is_enabled bool
+	err := row.Scan(&is_enabled)
+	return is_enabled, err
 }
 
 const listJobAuditLogsByJobName = `-- name: ListJobAuditLogsByJobName :many
@@ -177,7 +201,7 @@ func (q *Queries) ListJobAuditLogsByJobName(ctx context.Context, arg ListJobAudi
 }
 
 const listRegisteredJobs = `-- name: ListRegisteredJobs :many
-SELECT rj.id, rj.job_name, rj.schedule, rj.is_long_running, rj.is_enabled, rj.last_registered_at, rj.instance_id, rj.tenant_id, rj.created_at, rj.updated_at, 
+SELECT rj.id, rj.job_name, rj.schedule, rj.is_long_running, rj.is_enabled, rj.last_registered_at, rj.instance_id, rj.tenant_id, rj.created_at, rj.updated_at, rj.registration_error, 
   (SELECT COUNT(*) FROM cron_job_audit_logs al 
    WHERE al.job_name = rj.job_name AND al.tenant_id = rj.tenant_id) as execution_count
 FROM cron_registered_jobs rj
@@ -206,17 +230,18 @@ type ListRegisteredJobsParams struct {
 }
 
 type ListRegisteredJobsRow struct {
-	ID               uuid.UUID `json:"id"`
-	JobName          string    `json:"job_name"`
-	Schedule         string    `json:"schedule"`
-	IsLongRunning    bool      `json:"is_long_running"`
-	IsEnabled        bool      `json:"is_enabled"`
-	LastRegisteredAt time.Time `json:"last_registered_at"`
-	InstanceID       string    `json:"instance_id"`
-	TenantID         string    `json:"tenant_id"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	ExecutionCount   int64     `json:"execution_count"`
+	ID                uuid.UUID   `json:"id"`
+	JobName           string      `json:"job_name"`
+	Schedule          string      `json:"schedule"`
+	IsLongRunning     bool        `json:"is_long_running"`
+	IsEnabled         bool        `json:"is_enabled"`
+	LastRegisteredAt  time.Time   `json:"last_registered_at"`
+	InstanceID        string      `json:"instance_id"`
+	TenantID          string      `json:"tenant_id"`
+	CreatedAt         time.Time   `json:"created_at"`
+	UpdatedAt         time.Time   `json:"updated_at"`
+	RegistrationError pgtype.Text `json:"registration_error"`
+	ExecutionCount    int64       `json:"execution_count"`
 }
 
 func (q *Queries) ListRegisteredJobs(ctx context.Context, arg ListRegisteredJobsParams) ([]ListRegisteredJobsRow, error) {
@@ -246,6 +271,7 @@ func (q *Queries) ListRegisteredJobs(ctx context.Context, arg ListRegisteredJobs
 			&i.TenantID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RegistrationError,
 			&i.ExecutionCount,
 		); err != nil {
 			return nil, err
@@ -278,8 +304,8 @@ func (q *Queries) UpdateRegisteredJobEnabled(ctx context.Context, arg UpdateRegi
 
 const upsertRegisteredJob = `-- name: UpsertRegisteredJob :one
 INSERT INTO cron_registered_jobs (
-  job_name, schedule, is_long_running, is_enabled, 
-  last_registered_at, instance_id, tenant_id
+  job_name, schedule, is_long_running, is_enabled,
+  last_registered_at, instance_id, tenant_id, registration_error
 ) VALUES (
   $1::text,
   $2::text,
@@ -287,28 +313,32 @@ INSERT INTO cron_registered_jobs (
   $4::boolean,
   NOW(),
   $5::text,
-  $6::text
+  $6::text,
+  $7::text
 )
 ON CONFLICT (tenant_id, job_name) DO UPDATE
-SET 
+SET
   schedule = EXCLUDED.schedule,
   is_long_running = EXCLUDED.is_long_running,
-  is_enabled = EXCLUDED.is_enabled,
   last_registered_at = NOW(),
   instance_id = EXCLUDED.instance_id,
+  registration_error = EXCLUDED.registration_error,
   updated_at = NOW()
-RETURNING id, job_name, schedule, is_long_running, is_enabled, last_registered_at, instance_id, tenant_id, created_at, updated_at
+RETURNING id, job_name, schedule, is_long_running, is_enabled, last_registered_at, instance_id, tenant_id, created_at, updated_at, registration_error
 `
 
 type UpsertRegisteredJobParams struct {
-	JobName       string `json:"job_name"`
-	Schedule      string `json:"schedule"`
-	IsLongRunning bool   `json:"is_long_running"`
-	IsEnabled     bool   `json:"is_enabled"`
-	InstanceID    string `json:"instance_id"`
-	TenantID      string `json:"tenant_id"`
+	JobName           string      `json:"job_name"`
+	Schedule          string      `json:"schedule"`
+	IsLongRunning     bool        `json:"is_long_running"`
+	IsEnabled         bool        `json:"is_enabled"`
+	InstanceID        string      `json:"instance_id"`
+	TenantID          string      `json:"tenant_id"`
+	RegistrationError pgtype.Text `json:"registration_error"`
 }
 
+// is_enabled only seeds a NEW row: on conflict it is left alone, because it is
+// the admin's decision and every restart re-registers every job.
 func (q *Queries) UpsertRegisteredJob(ctx context.Context, arg UpsertRegisteredJobParams) (CronRegisteredJob, error) {
 	row := q.db.QueryRow(ctx, upsertRegisteredJob,
 		arg.JobName,
@@ -317,6 +347,7 @@ func (q *Queries) UpsertRegisteredJob(ctx context.Context, arg UpsertRegisteredJ
 		arg.IsEnabled,
 		arg.InstanceID,
 		arg.TenantID,
+		arg.RegistrationError,
 	)
 	var i CronRegisteredJob
 	err := row.Scan(
@@ -330,6 +361,7 @@ func (q *Queries) UpsertRegisteredJob(ctx context.Context, arg UpsertRegisteredJ
 		&i.TenantID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RegistrationError,
 	)
 	return i, err
 }

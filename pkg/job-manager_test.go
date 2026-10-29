@@ -25,13 +25,19 @@ type testJob struct {
 	name        string
 	tenantID    string
 	longRunning bool
+	schedule    string
 	run         func(ctx context.Context) error
 }
 
 func (j *testJob) Name() string                  { return j.name }
 func (j *testJob) Lock() string                  { return j.name }
 func (j *testJob) TenantID() string              { return j.tenantID }
-func (j *testJob) Schedule() string              { return "0 */5 * * * *" }
+func (j *testJob) Schedule() string {
+	if j.schedule != "" {
+		return j.schedule
+	}
+	return "0 */5 * * * *"
+}
 func (j *testJob) NextRunTime() time.Time        { return time.Now().Add(5 * time.Minute) }
 func (j *testJob) IsLongRunning() bool           { return j.longRunning }
 func (j *testJob) Run(ctx context.Context) error { return j.run(ctx) }
@@ -319,5 +325,125 @@ func TestExecuteJobWithLockRecordsOutcomeAfterParentContextEnds(t *testing.T) {
 	}
 	if lockedAt != nil {
 		t.Errorf("locked_at = %v, want NULL; the lock was never released", *lockedAt)
+	}
+}
+
+// Disabling a job in the admin API used to be cosmetic: nothing read
+// is_enabled before a run, and every restart's registration upsert reset it to
+// true. The disable must hold across a re-registration and stop the run.
+func TestDisabledJobStaysDisabledAndDoesNotRun(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	jm := newTestManager(t, ctx, "cron_lib_test_disabled")
+
+	ran := 0
+	job := &testJob{
+		name:     "test.disabled",
+		tenantID: "tenant-a",
+		run:      func(ctx context.Context) error { ran++; return nil },
+	}
+	if err := jm.Register(job); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	pool := jm.store.ConnPool
+	if _, err := pool.Exec(ctx,
+		`UPDATE cron_registered_jobs SET is_enabled = false WHERE job_name = $1 AND tenant_id = $2`,
+		job.Name(), job.TenantID()); err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+
+	// A restart: a fresh manager registers the same job again.
+	restarted := newJobManager(ctx, pool)
+	if err := restarted.Register(job); err != nil {
+		t.Fatalf("re-register: %v", err)
+	}
+
+	var enabled bool
+	if err := pool.QueryRow(ctx,
+		`SELECT is_enabled FROM cron_registered_jobs WHERE job_name = $1 AND tenant_id = $2`,
+		job.Name(), job.TenantID()).Scan(&enabled); err != nil {
+		t.Fatalf("read is_enabled: %v", err)
+	}
+	if enabled {
+		t.Errorf("is_enabled = true after re-registration; the restart undid the admin's disable")
+	}
+
+	restarted.executeJobWithLock(job)
+	if ran != 0 {
+		t.Errorf("disabled job ran %d time(s)", ran)
+	}
+	if got := auditStatuses(t, ctx, pool, job.Name()); len(got) != 0 {
+		t.Errorf("disabled job wrote audit entries %v; a skip must not log a row per tick", got)
+	}
+
+	// The hourly sweep of rows not re-registered for 24h must keep a disabled
+	// row, or the next registration recreates the job enabled.
+	if _, err := pool.Exec(ctx,
+		`UPDATE cron_registered_jobs SET last_registered_at = NOW() - INTERVAL '2 days'`); err != nil {
+		t.Fatalf("age row: %v", err)
+	}
+	if _, err := restarted.store.CleanupStaleRegisteredJobs(ctx, job.TenantID()); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	var n int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM cron_registered_jobs WHERE job_name = $1`, job.Name()).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("stale-registration sweep deleted the disabled row")
+	}
+}
+
+// A schedule robfig/cron rejects used to be logged by scheduleJob and nothing
+// else: the job never ran and its registered row looked healthy.
+func TestRegisterRefusesInvalidScheduleAndRecordsWhy(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	jm := newTestManager(t, ctx, "cron_lib_test_bad_schedule")
+
+	job := &testJob{
+		name:     "test.bad-schedule",
+		tenantID: "tenant-a",
+		schedule: "every tuesday-ish",
+		run:      func(ctx context.Context) error { return nil },
+	}
+
+	err := jm.Register(job)
+	if err == nil {
+		t.Fatal("Register accepted an unparseable schedule")
+	}
+	if !strings.Contains(err.Error(), "every tuesday-ish") {
+		t.Errorf("error %q does not name the rejected schedule", err)
+	}
+	if len(jm.jobs) != 0 {
+		t.Errorf("invalid job kept in the manager: %d job(s)", len(jm.jobs))
+	}
+
+	var recorded *string
+	if err := jm.store.ConnPool.QueryRow(ctx,
+		`SELECT registration_error FROM cron_registered_jobs WHERE job_name = $1 AND tenant_id = $2`,
+		job.Name(), job.TenantID()).Scan(&recorded); err != nil {
+		t.Fatalf("read registered row: %v", err)
+	}
+	if recorded == nil || !strings.Contains(*recorded, "invalid cron schedule") {
+		t.Errorf("registration_error = %v, want the parse failure", recorded)
+	}
+
+	// Fixing the schedule clears the recorded error.
+	job.schedule = "0 */5 * * * *"
+	if err := jm.Register(job); err != nil {
+		t.Fatalf("register fixed schedule: %v", err)
+	}
+	if err := jm.store.ConnPool.QueryRow(ctx,
+		`SELECT registration_error FROM cron_registered_jobs WHERE job_name = $1 AND tenant_id = $2`,
+		job.Name(), job.TenantID()).Scan(&recorded); err != nil {
+		t.Fatalf("read registered row: %v", err)
+	}
+	if recorded != nil {
+		t.Errorf("registration_error = %q after a valid registration, want NULL", *recorded)
 	}
 }

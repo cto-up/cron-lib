@@ -43,14 +43,15 @@ type CronJobAuditLog struct {
 }
 
 type CronRegisteredJob struct {
-	ID               uuid.UUID `json:"id"`
-	JobName          string    `json:"job_name"`
-	Schedule         string    `json:"schedule"`
-	IsLongRunning    bool      `json:"is_long_running"`
-	IsEnabled        bool      `json:"is_enabled"`
-	LastRegisteredAt time.Time `json:"last_registered_at"`
-	InstanceID       string    `json:"instance_id"`
-	TenantID         string    `json:"tenant_id"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                uuid.UUID   `json:"id"`
+	JobName           string      `json:"job_name"`
+	Schedule          string      `json:"schedule"`
+	IsLongRunning     bool        `json:"is_long_running"`
+	IsEnabled         bool        `json:"is_enabled"`
+	LastRegisteredAt  time.Time   `json:"last_registered_at"`
+	InstanceID        string      `json:"instance_id"`
+	TenantID          string      `json:"tenant_id"`
+	CreatedAt         time.Time   `json:"created_at"`
+	UpdatedAt         time.Time   `json:"updated_at"`
+	RegistrationError pgtype.Text `json:"registration_error"`
 }
