@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	dbCore "ctoup.com/coreapp/pkg/core/db"
+	dbCore "github.com/cto-up/core-lib/pkg/core/db"
 	"github.com/cto-up/cron-lib/pkg/db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

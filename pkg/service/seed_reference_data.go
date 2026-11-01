@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	coreRepo "ctoup.com/coreapp/pkg/core/db/repository"
+	coreRepo "github.com/cto-up/core-lib/pkg/core/db/repository"
 	"github.com/cto-up/cron-lib/pkg/db/repository"
 )
 

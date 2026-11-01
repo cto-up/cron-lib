@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"ctoup.com/coreapp/api/helpers"
-	"ctoup.com/coreapp/pkg/shared/auth"
-	"ctoup.com/coreapp/pkg/shared/util"
+	"github.com/cto-up/core-lib/api/helpers"
+	"github.com/cto-up/core-lib/pkg/shared/auth"
+	"github.com/cto-up/core-lib/pkg/shared/util"
 	api "github.com/cto-up/cron-lib/api/openapi"
 	"github.com/cto-up/cron-lib/pkg/db"
 	"github.com/cto-up/cron-lib/pkg/db/repository"

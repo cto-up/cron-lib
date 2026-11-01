@@ -3,13 +3,13 @@ package api
 import (
 	"net/http"
 
-	"ctoup.com/coreapp/pkg/shared/auth"
-	"ctoup.com/coreapp/pkg/shared/repository/subentity"
+	"github.com/cto-up/core-lib/pkg/shared/auth"
+	"github.com/cto-up/core-lib/pkg/shared/repository/subentity"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"ctoup.com/coreapp/api/helpers"
+	"github.com/cto-up/core-lib/api/helpers"
 	api "github.com/cto-up/cron-lib/api/openapi"
 	"github.com/cto-up/cron-lib/pkg/db"
 	"github.com/cto-up/cron-lib/pkg/db/repository"
