@@ -64,14 +64,6 @@ var (
 	instanceMu   sync.Mutex
 )
 
-// GetJobManager returns the singleton instance of JobManager
-func GetJobManager() *JobManager {
-	if instance == nil {
-		log.Printf("Warning: JobManager singleton accessed before initialization")
-	}
-	return instance
-}
-
 // InitJobManager initializes the singleton JobManager instance
 func InitJobManager(ctx context.Context, connPool *pgxpool.Pool) *JobManager {
 	instanceMu.Lock()
